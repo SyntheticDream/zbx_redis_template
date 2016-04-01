@@ -10,11 +10,21 @@ parser.add_argument('-p','--port',dest='redis_port',action='store',help='Redis s
 parser.add_argument('-a','--auth',dest='redis_pass',action='store',help='Redis server pass',default=None)
 args = parser.parse_args()
 
-zabbix_host = '127.0.0.1'       # Zabbix Server IP
+zabbix_host = 'zabbix.noc.knu.ua'       # Zabbix Server IP
 zabbix_port = 10051             # Zabbix Server Port
 
 # Name of monitored server like it shows in zabbix web ui display
 redis_hostname = args.redis_hostname
+
+what_we_need = [
+    'connected_clients',
+    'used_memory',
+    'blocked_clients',
+    'rejected_connections',
+    'keyspace_misses',
+    'instantaneous_ops_per_sec',
+    'mem_fragmentation_ratio',
+    ]
 
 class Metric(object):
     def __init__(self, host, key, value, clock=None):
@@ -85,13 +95,17 @@ def _recv_all(sock, count):
 def main():
     if redis_hostname and args.metric:
         client = redis.StrictRedis(host='localhost', port=args.redis_port, password=args.redis_pass)
-        server_info = client.info()
+        all_info = client.info()
+        server_info = {}
+        for k, v in all_info.iteritems():
+            if k in what_we_need:
+                server_info[k] = v
 
         if args.metric:
-            if args.db and args.db in server_info.keys():
-                server_info['key_space_db_keys'] = server_info[args.db]['keys']
-                server_info['key_space_db_expires'] = server_info[args.db]['expires']
-                server_info['key_space_db_avg_ttl'] = server_info[args.db]['avg_ttl']
+            if args.db and args.db in all_info.keys():
+                server_info['keyspace_db_keys'] = all_info[args.db]['keys']
+                #server_info['keyspace_db_expires'] = server_info[args.db]['expires']
+                #server_info['keyspace_db_avg_ttl'] = server_info[args.db]['avg_ttl']
 
             def llen():
                 print(client.llen(args.db))
@@ -104,7 +118,7 @@ def main():
                 print(llensum)
 
             def list_key_space_db():
-                if args.db in server_info:
+                if args.db in all_info:
                     print(args.db)
                 else:
                     print('database_detect')
@@ -114,29 +128,28 @@ def main():
                     print(server_info[args.metric])
 
             {
-                'llen': llen,
-                'llenall': llensum,
+#                'llen': llen,
+#                'llenall': llensum,
                 'list_key_space_db': list_key_space_db,
             }.get(args.metric, default)()
 
         else:
             print('Not selected metric');
-    else:
-        client = redis.StrictRedis(host='localhost', port=args.redis_port, password=args.redis_pass)
-        server_info = client.info()
+        print server_info
 
-        a = []
-        for i in server_info:
-            a.append(Metric(redis_hostname, ('redis[%s]' % i), server_info[i]))
 
-        llensum = 0
-        for key in client.scan_iter('*'):
-            if client.type(key) == 'list':
-                llensum += client.llen(key)
-        a.append(Metric(redis_hostname, 'redis[llenall]', llensum))
+    a = []
+    for i in server_info:
+        a.append(Metric(redis_hostname, ('redis[%s]' % i), server_info[i]))
 
-        # Send packet to zabbix
-        send_to_zabbix(a, zabbix_host, zabbix_port)
+    llensum = 0
+    for key in client.scan_iter('*'):
+        if client.type(key) == 'list':
+            llensum += client.llen(key)
+    a.append(Metric(redis_hostname, 'redis[llenall]', llensum))
+
+    # Send packet to zabbix
+    send_to_zabbix(a, zabbix_host, zabbix_port)
 
 if __name__ == '__main__':
     main()
