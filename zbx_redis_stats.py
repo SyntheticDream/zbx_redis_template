@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#! /usr/local/bin/python2.7
 
 import sys, redis, json, re, struct, time, socket, argparse
 
@@ -14,7 +14,7 @@ zabbix_host = '127.0.0.1'       # Zabbix Server IP
 zabbix_port = 10051             # Zabbix Server Port
 
 # Name of monitored server like it shows in zabbix web ui display
-redis_hostname = args.redis_hostname if args.redis_hostname else socket.gethostname()
+redis_hostname = args.redis_hostname
 
 class Metric(object):
     def __init__(self, host, key, value, clock=None):
@@ -84,7 +84,7 @@ def _recv_all(sock, count):
 
 def main():
     if redis_hostname and args.metric:
-        client = redis.StrictRedis(host=redis_hostname, port=args.redis_port, password=args.redis_pass)
+        client = redis.StrictRedis(host='localhost', port=args.redis_port, password=args.redis_pass)
         server_info = client.info()
 
         if args.metric:
@@ -122,7 +122,7 @@ def main():
         else:
             print('Not selected metric');
     else:
-        client = redis.StrictRedis(host=redis_hostname, port=args.redis_port, password=args.redis_pass)
+        client = redis.StrictRedis(host='localhost', port=args.redis_port, password=args.redis_pass)
         server_info = client.info()
 
         a = []
